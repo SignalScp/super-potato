@@ -3,13 +3,20 @@ import logging
 import re
 import base64
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, BufferedInputFile
+from aiogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
+    BufferedInputFile
+)
 from aiogram.filters import CommandStart
 import aiohttp
 import json
 import os
 from datetime import datetime
 from io import BytesIO
+
 
 # Настройки
 TELEGRAM_TOKEN = "7963460845:AAFoa_MPJW_jKVAZ3wTs-wa7wYOqYy6FEIM"
@@ -91,7 +98,11 @@ def get_user_model(user_id: int) -> str:
     user_id_str = str(user_id)
     
     if user_id_str not in db:
-        db[user_id_str] = {"model": "gemini-3-pro", "history": [], "web_search": True}
+        db[user_id_str] = {
+            "model": "gemini-3-pro",
+            "history": [],
+            "web_search": True
+        }
         save_db(db)
         return "gemini-3-pro"
     
@@ -122,7 +133,11 @@ def toggle_web_search(user_id: int) -> bool:
     user_id_str = str(user_id)
     
     if user_id_str not in db:
-        db[user_id_str] = {"model": "gemini-3-pro", "history": [], "web_search": False}
+        db[user_id_str] = {
+            "model": "gemini-3-pro",
+            "history": [],
+            "web_search": False
+        }
     else:
         current = db[user_id_str].get("web_search", True)
         db[user_id_str]["web_search"] = not current
@@ -137,7 +152,11 @@ def set_user_model(user_id: int, model: str):
     user_id_str = str(user_id)
     
     if user_id_str not in db:
-        db[user_id_str] = {"model": model, "history": [], "web_search": True}
+        db[user_id_str] = {
+            "model": model,
+            "history": [],
+            "web_search": True
+        }
     else:
         db[user_id_str]["model"] = model
         # Сохраняем существующие настройки
@@ -153,7 +172,11 @@ def save_message(user_id: int, role: str, content: str):
     user_id_str = str(user_id)
 
     if user_id_str not in db:
-        db[user_id_str] = {"model": "gemini-3-pro", "history": [], "web_search": True}
+        db[user_id_str] = {
+            "model": "gemini-3-pro",
+            "history": [],
+            "web_search": True
+        }
 
     if "history" not in db[user_id_str]:
         db[user_id_str]["history"] = []
@@ -176,7 +199,10 @@ def get_history(user_id: int, limit: int = 20) -> list:
         return []
 
     messages = db[user_id_str]["history"][-limit:]
-    return [{"role": msg["role"], "content": msg["content"]} for msg in messages]
+    return [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in messages
+    ]
 
 
 def clear_history(user_id: int):
@@ -187,7 +213,11 @@ def clear_history(user_id: int):
     if user_id_str in db:
         model = db[user_id_str].get("model", "gemini-3-pro")
         web_search = db[user_id_str].get("web_search", True)
-        db[user_id_str] = {"model": model, "history": [], "web_search": web_search}
+        db[user_id_str] = {
+            "model": model,
+            "history": [],
+            "web_search": web_search
+        }
         save_db(db)
 
 
@@ -274,7 +304,7 @@ async def send_long_message(message: Message, text: str):
             await asyncio.sleep(0.5)
         try:
             await message.answer(part, parse_mode="HTML")
-        except:
+        except Exception:
             # Если HTML не работает, отправляем как есть
             await message.answer(part)
 
@@ -285,10 +315,12 @@ def get_models_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура выбора моделей"""
     buttons = []
     for model_id, model_name in MODELS.items():
-        buttons.append([InlineKeyboardButton(
-            text=model_name,
-            callback_data=f"model_{model_id}"
-        )])
+        buttons.append([
+            InlineKeyboardButton(
+                text=model_name,
+                callback_data=f"model_{model_id}"
+            )
+        ])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -305,7 +337,11 @@ def get_code_actions_keyboard(code_index: int) -> InlineKeyboardMarkup:
 
 # === РАБОТА С AI ===
 
-async def get_ai_response(user_id: int, user_message: str, image_base64: str = None) -> str:
+async def get_ai_response(
+    user_id: int,
+    user_message: str,
+    image_base64: str = None
+) -> str:
     """Получить ответ от AI с историей и опциональным изображением"""
     headers = {
         "Authorization": "Bearer openai"
@@ -347,13 +383,18 @@ async def get_ai_response(user_id: int, user_message: str, image_base64: str = N
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(API_URL, json=send, headers=headers) as response:
+            async with session.post(
+                API_URL,
+                json=send,
+                headers=headers
+            ) as response:
                 if response.status == 200:
                     data = await response.json()
                     ai_reply = data['choices'][0]['message']['content']
 
                     # Сохраняем текстовую версию для истории
-                    save_message(user_id, "user", user_message if not image_base64 else f"{user_message} [изображение]")
+                    user_msg = user_message if not image_base64 else f"{user_message} [изображение]"
+                    save_message(user_id, "user", user_msg)
                     save_message(user_id, "assistant", ai_reply)
 
                     return ai_reply
@@ -370,6 +411,7 @@ async def get_ai_response(user_id: int, user_message: str, image_base64: str = N
 
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
+    """Команда /start"""
     current_model = get_user_model(message.from_user.id)
     model_name = MODELS.get(current_model, current_model)
     web_status = "🌐 Вкл" if get_web_search_status(message.from_user.id) else "🔌 Выкл"
@@ -397,6 +439,7 @@ async def cmd_start(message: Message):
 
 @dp.message(F.text == "/web")
 async def cmd_web(message: Message):
+    """Команда переключения интернет-поиска"""
     new_status = toggle_web_search(message.from_user.id)
     status_text = "🌐 <b>Включен</b>" if new_status else "🔌 <b>Выключен</b>"
     
@@ -410,6 +453,7 @@ async def cmd_web(message: Message):
 
 @dp.message(F.text == "/model")
 async def cmd_model(message: Message):
+    """Команда выбора модели"""
     current_model = get_user_model(message.from_user.id)
     model_name = MODELS.get(current_model, current_model)
     
@@ -424,6 +468,7 @@ async def cmd_model(message: Message):
 
 @dp.callback_query(F.data.startswith("model_"))
 async def process_model_selection(callback: CallbackQuery):
+    """Обработка выбора модели"""
     model_id = callback.data.replace("model_", "")
     
     if model_id in MODELS:
@@ -441,12 +486,14 @@ async def process_model_selection(callback: CallbackQuery):
 
 @dp.message(F.text == "/clear")
 async def cmd_clear(message: Message):
+    """Команда очистки истории"""
     clear_history(message.from_user.id)
     await message.answer("🗑️ <b>История очищена!</b>", parse_mode="HTML")
 
 
 @dp.message(F.text == "/history")
 async def cmd_history(message: Message):
+    """Команда показа истории"""
     history = get_history(message.from_user.id, limit=10)
 
     if not history:
@@ -464,6 +511,7 @@ async def cmd_history(message: Message):
 
 @dp.message(F.text == "/help")
 async def cmd_help(message: Message):
+    """Команда помощи"""
     web_status = "🌐 Включен" if get_web_search_status(message.from_user.id) else "🔌 Выключен"
     
     await message.answer(
@@ -567,7 +615,10 @@ async def handle_document(message: Message):
         await message.answer("❌ Файл слишком большой! Максимум 20 МБ.")
         return
     
-    thinking_msg = await message.answer("📄 <i>Читаю файл...</i>", parse_mode="HTML")
+    thinking_msg = await message.answer(
+        "📄 <i>Читаю файл...</i>",
+        parse_mode="HTML"
+    )
     
     try:
         # Скачиваем файл
@@ -619,7 +670,10 @@ async def handle_document(message: Message):
 @dp.message(F.photo)
 async def handle_photo(message: Message):
     """Обработка фотографий"""
-    thinking_msg = await message.answer("🖼️ <i>Анализирую изображение...</i>", parse_mode="HTML")
+    thinking_msg = await message.answer(
+        "🖼️ <i>Анализирую изображение...</i>",
+        parse_mode="HTML"
+    )
     
     try:
         # Берем фото наилучшего качества (последнее в массиве)
@@ -642,7 +696,11 @@ async def handle_photo(message: Message):
         await bot.send_chat_action(message.chat.id, "typing")
         
         # Получаем ответ от AI с изображением
-        ai_response = await get_ai_response(message.from_user.id, caption, image_base64)
+        ai_response = await get_ai_response(
+            message.from_user.id,
+            caption,
+            image_base64
+        )
         
         await thinking_msg.delete()
         
@@ -705,6 +763,7 @@ async def handle_message(message: Message):
 
 
 async def main():
+    """Запуск бота"""
     logging.info("🚀 Бот запущен!")
     await dp.start_polling(bot)
 
